@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.2",
   "license": "MIT",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",
@@ -35,6 +35,10 @@
   },
   "name": "redonk",
   "author": "Dusan Jovanov",
+  "description": "Ridiculously simple state management in pure React 🎉",
+  "repository": {
+    "url": "https://github.com/dusanjovanov/redonk"
+  },
   "module": "dist/redonk.esm.js",
   "size-limit": [
     {

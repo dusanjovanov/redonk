@@ -2,7 +2,6 @@
 
 Ridiculously simple state management in pure React 🎉
 <br />
-<br />
 
 ## **Installation**
 
@@ -198,6 +197,8 @@ useAnything: ({ state }) => {
 ```
 
 Or anything else really, be creative!
+
+<br />
 
 ## _Action and useAnything args_:
 
