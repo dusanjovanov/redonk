@@ -89,27 +89,15 @@ const {
 
 ## _Accepts_:
 
-<br />
-
 ### **_name_**
-
-<br />
 
 Name of the model.
 
-<br />
-
 ### **_initialState_**
-
-<br />
 
 The initial state of the model.
 
-<br />
-
 ### **_actions_**
-
-<br />
 
 An object with your actions. They will be returned to components with the same name as defined here.
 
@@ -169,6 +157,7 @@ const someNumber = someAction();
 <br />
 
 This hook is called inside the model's Provider component and you have access to everything inside the model.
+It get's called when the model's state is updated.
 What you return from this function gets merged with the StateContext's value, and you can access it with **useModelState** and **useModel**.
 
 <br />
@@ -210,15 +199,9 @@ useAnything: ({ state }) => {
 
 Or anything else really, be creative!
 
-<br />
-
 ## _Action and useAnything args_:
 
-<br />
-
 ### **_set: (callback: (state: ModelState) => ModelState) => Promise\<ModelState\>_**
-
-<br />
 
 The set function accepts a callback that accepts the current state as the argument and expects you to return the new state of the model.
 
@@ -235,11 +218,7 @@ someAction: async ({ set }) => {
 const newCount = someAction();
 ```
 
-<br />
-
 ### **_getModelState: (modelName: string) => ModelState_**
-
-<br />
 
 Used to read a model's state by it's name. If you try to access the state of the model you're in, you'll get the state back without the need to call **combineModels**.
 
@@ -252,8 +231,6 @@ someAction: ({ getModelState }) => {
 ```
 
 ### **_getModelActions: (modelName: string) => ModelActions_**
-
-<br />
 
 Used to read a model's actions by it's name. If you try to access the actions of the model you're in, you'll get the actions back without the need to call **combineModels**.
 
@@ -268,11 +245,7 @@ someAction: ({ getModelActions }) => {
 
 ## _Returns_:
 
-<br />
-
 ### **_Provider_**
-
-<br />
 
 Holds the state and actions of the model, calls the **_useAnything_** hook, and renders the state and actions contexts while passing state and result of **_useAnything_** hook to the state context and actions to the actions context.
 
@@ -289,8 +262,6 @@ return (
 
 ### **_useModelState()_**
 
-<br />
-
 Returns the state of the model.
 
 ```tsx
@@ -299,8 +270,6 @@ const state = useModelState();
 
 ### **_useModelActions()_**
 
-<br />
-
 Returns the actions of the model. Never causes the component to render, because actions never change their reference. Use when you only need actions in your component.
 
 ```tsx
@@ -308,8 +277,6 @@ const actions = useModelActions();
 ```
 
 ### **_useModel()_**
-
-<br />
 
 Returns the combined results of **_useModelState_** and **_useModelActions_**.
 Use when you need both state and actions in a component.
@@ -320,11 +287,7 @@ const { state, actions } = useModel();
 
 ---
 
-<br />
-
 ### **_combineModels({ models }) => { Provider }_**
-
-<br />
 
 Returns a Provider which renders all the registered model's Providers, and gives you the ability to access other model's states and actions from your model.
 
@@ -350,11 +313,7 @@ const App = () => {
 }
 ```
 
-<br />
-
 ## **Usage with Typescript**
-
-<br />
 
 When creating a model, you should define the type of your state:
 
