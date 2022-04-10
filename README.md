@@ -34,34 +34,38 @@ for creating contexts and state, but gave it structure and pattern similar to **
 Differences between this and **@reduxjs/toolkit** (and **redux** in general):
 
 - This library is pure React and only around **900B** in production.
+
 - There aren't any **_selectors_** - you just subscribe to the whole state of a single model, or just actions (which never change). This should be a good enough performance optimization as you often tend to use multiple fields from a single **redux** slice in your component. This also simplifies things quite a bit as you can just get the state you need without having to deal with memoization and using **reselect**.
 
 - **_Actions_** in this library are not case reducers. They're basically just like functions that you define
   inside your component. They can update the model's state with **set**, they can be async so you can make
   API requests inside of them, and what you return from your action gets returned to the caller (component).
 
-- There aren't any access restrictions between models. When you call **combineModels** and render the returned Provider, you get the ability for the models to
-  communicate with each other through **getModelState** and **getModelActions**. These functions are
-  available in your actions. So every action can access it's own, or any other model's state and actions.
-
 ## **API**
 
-### **_createModel(model: ModelConfig) => { Provider, useModel, useModelState, useModelActions }_**
+The library only exports one function!
+
+### **_createStore({ models, actions, useRedonk }) => { Provider, useModelState, useActions, useRedonk }_**
 
 <br />
 
-This function creates the following things:
+This function does the following things:
 
-- Two contexts (one for state, and another for actions)
-- A **_Provider_** component which holds the model's state and actions and renders the state context with the appropriate values being passed.
-- Three hooks for getting state and actions in your components: **_useModelState_**, **_useModelActions_**, and **_useModel_**.
+- Creates the state with useReducer
+- Creates a state context for each of the models defined, and passes the corresponding slice of state to each of those models
+- Creates an actions context and passes a modified version of the actions defined in it ( actions never change their ref, so this context never gets updated )
+- Creates a useRedonk context which holds the value that was returned from the **useRedonk** hook
+- Creates the Provider component which holds the state, and renders all of the contexts.
+- Creates three hooks for consuming state and actions:
+  - **useModelState** which accepts a **modelKey** to know to which model's context to subscribe to
+  - **useActions** for subscribing to the actions context
+  - **useRedonk** for subscribing to the useRedonk context for getting what was returned from the **useRedonk** hook
 
 ```tsx
-import { createModel } from 'redonk';
+import { createStore } from 'redonk';
 
-const counterModel = createModel({
-  name: 'counter',
-  initialState: {
+const { Provider, useModelState, useActions, useRedonk } = createStore({
+  models: {
     count: 0,
   },
   actions: {
@@ -72,29 +76,35 @@ const counterModel = createModel({
       set(state => ({ ...state, count: state.count - 1 }));
     },
   },
-  useAnything: ({ state }) => {
+  useRedonk: ({ state }) => {
     useEffect(() => {
       console.log('State changed');
     }, [state]);
   },
 });
-const {
-  Provider: CounterProvider,
-  useModel: useCounterModel,
-  useModelState: useCounterModelState,
-  useModelActions: useCounterModelActions,
-} = counterModel;
 ```
 
 ## _Accepts_:
 
-### **_name_**
+### **_models_**
 
-Name of the model.
+An object that defines how the state will be split into contexts.
 
-### **_initialState_**
+In this example we will have two state contexts, one for _counter_ and the other for _todos_:
 
-The initial state of the model.
+```tsx
+createStore({
+  models: {
+    counter: {
+      count: 0,
+    },
+    todos: {
+      items: [],
+      filter: 'all',
+    },
+  },
+});
+```
 
 ### **_actions_**
 
@@ -151,33 +161,37 @@ someAction: () => {
 const someNumber = someAction();
 ```
 
-### **_useAnything: ({state, actions, set, getModelState, getModelActions}) => { [key: string]: any }_**
+### **_useRedonk: ({ state, actions, set }) => any_**
 
 <br />
 
-This hook is called inside the model's Provider component and you have access to everything inside the model.
-It get's called when the model's state is updated.
-What you return from this function gets merged with the StateContext's value, and you can access it with **useModelState** and **useModel**.
+This hook is called inside the Provider component and you have access to everything inside the "store".
+It get's called any time the state is updated.
+What you return from this function gets passed in the UseRedonk context, and you can access it with **useRedonk** hook.
 
 <br />
 
 You can use it for computed fields:
 
 ```tsx
-useAnything: ({ state }) => {
+useRedonk: ({ state }) => {
   const filteredTodos = useMemo(() => {
-    return state.todos.filter(todo => {
-      if (state.filter === 'active') return !todo.isDone;
-      if (state.filter === 'completed') return todo.isDone;
+    return state.todos.items.filter(todo => {
+      if (state.todos.filter === 'active') return !todo.isDone;
+      if (state.todos.filter === 'completed') return todo.isDone;
       return true;
     });
-  }, [state.todos, state.filter]);
+  }, [state.todos.items, state.todos.filter]);
 
-  return { filteredTodos };
+  // needs to be memoized because we are returning a new object
+  // if we didn't memoize it, the UseRedonk context would update every time the state updates!
+  return useMemo(() => {
+    return { filteredTodos }
+  }, [filteredTodos]);
 };
 
 // and then in your component
-const { filteredTodos } = useTodosModelState();
+const { filteredTodos } = useRedonk();
 
 return (
   <>
@@ -189,7 +203,7 @@ return (
 For effects:
 
 ```tsx
-useAnything: ({ state }) => {
+useRedonk: ({ state }) => {
   useEffect(() => {
     // do something when state changes
   }, [state]);
@@ -200,13 +214,34 @@ Or anything else really, be creative!
 
 <br />
 
-## _Action and useAnything args_:
+## _Action and useRedonk args_:
 
-### **_set: (callback: (state: ModelState) => ModelState) => Promise\<ModelState\>_**
+### **_set: (callback: (state: State) => State) => Promise\<State\>_**
 
-The set function accepts a callback that accepts the current state as the argument and expects you to return the new state of the model.
+### **_set: (modelKey: string, callback: (state: ModelState) => ModelState) => Promise\<ModelState\>_**
 
-It returns a Promise with the new state, so you can await and know when the state has been updated.
+The **set** function can be called in two ways:
+
+- Just with the callback which accepts the whole state and expects you to return the new state.
+- With a **modelKey** and a callback and then you get only that model's portion of the state in your callback and are responsible to return the new state of that model.
+
+```tsx
+models: {
+  counter: {
+    count: 0;
+  }
+}
+// set with the whole state
+increment: ({ set }) => {
+  set(s => ({ ...s, counter: { ...s.counter, count: s.counter.count + 1 } }));
+};
+// set with only the counter state
+increment: ({ set }) => {
+  set('counter', s => ({ ...s, count: s.count + 1 }));
+};
+```
+
+The set function returns a Promise which is resolved with the new state once the state has been updated so you can await it and know when the state has been updated.
 
 Don't worry, this is completely safe. It's based on the same pattern [**useEffectReducer**](https://github.com/davidkpiano/useEffectReducer#isnt-this-unsafe) uses.
 
@@ -219,28 +254,32 @@ someAction: async ({ set }) => {
 const newCount = someAction();
 ```
 
-### **_getModelState: (modelName: string) => ModelState_**
+### **_getState: () => State_**
 
-Used to read a model's state by it's name. If you try to access the state of the model you're in, you'll get the state back without the need to call **combineModels**.
+Returns the whole state.
 
-If you want to access a different model's state, you need to register all your models with **combineModels** and wrap your application with the returned **Provider**.
+One thing to pay attention on is that Redonk uses React state which is async so if you call **getState** right after setting the state, it will return the old state:
 
 ```tsx
-someAction: ({ getModelState }) => {
-  const otherModelsState = getModelState('otherModel');
+models: {
+  something: 2;
+}
+someAction: ({ set, getState }) => {
+  set(s => ({ ...s, something: 3 }));
+  const state = getState(); // this will return 2
 };
 ```
 
-### **_getModelActions: (modelName: string) => ModelActions_**
-
-Used to read a model's actions by it's name. If you try to access the actions of the model you're in, you'll get the actions back without the need to call **combineModels**.
-
-If you want to access a different model's actions, you need to register all your models with **combineModels** and wrap your application with the returned **Provider**.
+If you want, you can await or attach a then callback to **set** to know when the state has been updated:
 
 ```tsx
-someAction: ({ getModelActions }) => {
-  const otherModelsActions = getModelActions('otherModel');
-  otherModelsActions.doSomething();
+models: {
+  something: 2;
+}
+someAction: ({ set, getState }) => {
+  set(s => ({ ...s, something: 3 })).then(() => {
+    const state = getState(); // this will return 3
+  });
 };
 ```
 
@@ -248,10 +287,7 @@ someAction: ({ getModelActions }) => {
 
 ### **_Provider_**
 
-Holds the state and actions of the model, calls the **_useAnything_** hook, and renders the state and actions contexts while passing state and result of **_useAnything_** hook to the state context and actions to the actions context.
-
-Wrap your component tree with it if you only have one model, otherwise use the **_Provider_** returned
-from **_combineModels_**
+Holds the state, actions and renders all of the contexts. You need to wrap your component tree with it:
 
 ```tsx
 return (
@@ -261,104 +297,108 @@ return (
 )
 ```
 
-### **_useModelState()_**
+### **_useModelState( modelKey: string )_**
 
-Returns the state of the model.
+Returns the state of the model which key was passed in.
 
 ```tsx
-const state = useModelState();
+const counterState = useModelState('counter');
 ```
 
-### **_useModelActions()_**
+### **_useActions()_**
 
-Returns the actions of the model. Never causes the component to render, because actions never change their reference. Use when you only need actions in your component.
+Returns all of the actions.
 
 ```tsx
-const actions = useModelActions();
+const actions = useActions();
 ```
 
-### **_useModel()_**
+### **_useRedonk()_**
 
-Returns the combined results of **_useModelState_** and **_useModelActions_**.
-Use when you need both state and actions in a component.
+Returns whatever you returned from the **useRedonk** hook defined when creating the store.
 
 ```tsx
-const { state, actions } = useModel();
+const useRedonkReturn = useRedonk();
 ```
 
 ---
 
-### **_combineModels({ models }) => { Provider }_**
-
-Returns a Provider which renders all the registered model's Providers, and gives you the ability to access other model's states and actions from your model.
-
-```tsx
-import { createModel, combineModels } from 'redonk';
-
-const counterModel = createModel(...)
-const todosModel = createModel(...)
-
-const { Provider } = combineModels({
-  models: {
-    counter: counterModel,
-    todos: todosModel,
-  }
-});
-
-const App = () => {
-  return (
-    <Provider>
-      {...}
-    <Provider>
-  )
-}
-```
-
 ## **Usage with Typescript**
 
-When creating a model, you should define the type of your state:
+When creating the store, you should define the type of your state:
 
 ```tsx
-  type CounterState = {
+import { createStore } from 'redonk';
+
+type Todo = {
+  id: string;
+  text: string;
+  isDone: boolean;
+};
+
+type AppState = {
+  counter: {
     count: number;
-  }
+  };
+  todos: {
+    items: Todo[];
+  };
+};
 
-  // like this
-  createModel({
-    initialState: {
-      count: 0
-    } as CounterState
-  })
+// like this
+createStore({
+  models: {
+    counter: {
+      count: 0,
+    },
+    todos: {
+      items: [],
+    },
+  } as AppState,
+});
 
-  // or like this
-  const initialState: CounterState = {
-    count: 0;
-  }
+// or like this
+const models: AppState = {
+  counter: {
+    count: 0,
+  },
+  todos: {
+    items: [],
+  },
+};
 
-  createModel({
-    initialState
-  })
+createStore({
+  models,
+});
 ```
 
 You also need to define the types of your action arguments including the payload:
 
 ```tsx
-import { ActionArgs } from 'redonk';
+import { ActionArgs, createStore } from 'redonk';
 
-type CounterState = {
-  count: number;
+type Todo = {
+  id: string;
+  text: string;
+  isDone: boolean;
 };
 
-createModel({
+type AppState = {
+  counter: {
+    count: number;
+  };
+  todos: {
+    items: Todo[];
+  };
+};
+
+createStore({
   actions: {
     // without payload
-    increment: ({ set }: ActionArgs<CounterState>) => {},
+    increment: ({ set }: ActionArgs<AppState>) => {},
     // with payload
     // the first generic type is State, and the second generic to ActionArgs is Payload
-    incrementByAmount: ({
-      set,
-      payload,
-    }: ActionArgs<CounterState, number>) => {},
+    incrementByAmount: ({ set, payload }: ActionArgs<AppState, number>) => {},
   },
 });
 ```
@@ -367,61 +407,48 @@ And voila! You have intellisense everywhere:
 
 ```tsx
 // inside component
-const state = useCounterModelState(); // state is correctly inferred as { count: number }
+const counterState = useModelState('counter'); // counter state is correctly inferred as { count: number }
 
-const actions = useCounterModelActions(); // actions are correctly inferred including the type of Payload
+const actions = useActions(); // actions are correctly inferred including the type of Payload
 
-const { state, actions } = useCounterModel(); // same thing as above
-```
-
-A little disclaimer:
-
-Unfortunately there's no inferrence for **getModelState** and **getModelActions** yet, but in the meantime, you can explicitly set the return type for **getModelState** like so:
-
-```tsx
-const counterState = getModelState<CounterState>('counter'); // counterState inferred as { count: number }
+const useRedonkReturn = useRedonk(); // correctly inferred
 ```
 
 ## **Types**
 
 ```tsx
-type ModelConfig = {
-  name: string;
-  initialState: any;
-  useAnything?: UseAnything;
-  actions: Actions;
+type SetStateCallback<State> = (state: State) => State;
+type SetFn<State> = {
+  (callback: SetStateCallback<State>): Promise<State>;
+  <modelKey extends keyof State>(
+    modelKey: modelKey,
+    callback: SetStateCallback<State[modelKey]>
+  ): Promise<State[modelKey]>;
 };
-
-type Actions = {
-  [key: string]: Action;
+type ReturnedAction<Action> = Action extends (args: infer Args) => any
+  ? Args extends { payload: infer Payload }
+    ? (payload: Payload) => ReturnType<Action>
+    : () => ReturnType<Action>
+  : any;
+type ReturnedActions<Actions> = {
+  [ActionName in keyof Actions]: ReturnedAction<Actions[ActionName]>;
 };
-
-type SetStateCallback<ModelState> = (state: ModelState) => ModelState;
-
-type SetFn<ModelState> = (
-  callback: SetStateCallback<ModelState>
-) => Promise<ModelState>;
-
-export type ActionArgs<State, Payload = void> = {
+type GetState<State> = () => State;
+type _ActionArgs<State, Actions> = {
   set: SetFn<State>;
-  getModelState: <ModelState = any>(modelName: string) => ModelState;
-  getModelActions: (modelName: string) => any;
-  payload?: Payload;
+  actions: ReturnedActions<Actions>;
+  getState: GetState<State>;
 };
-
-type Action = (args: ActionArgs) => any | Promise<any>;
-
-type UseAnything = ({
-  state: any,
-  actions,
-  set,
-  getModelState,
-  getActionsState,
-}) => { [key: string]: any };
-
-type CombineModelsArgs<Models> = {
-  models: {
-    [ModelName in keyof Models]: Models[ModelName];
-  };
+export type ActionArgs<
+  State,
+  Payload = void,
+  Actions = any
+> = Payload extends void
+  ? _ActionArgs<State, Actions>
+  : _ActionArgs<State, Actions> & {
+      payload: Payload;
+    };
+type State<Models> = {
+  [modelKey in keyof Models]: Models[modelKey];
 };
 ```

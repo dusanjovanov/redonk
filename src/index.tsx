@@ -1,42 +1,12 @@
 import * as React from 'react';
 
-type SetStateCallback<ModelState> = (state: ModelState) => ModelState;
-type SetFn<ModelState> = (
-  callback: SetStateCallback<ModelState>
-) => Promise<ModelState>;
-type OnUpdate<ModelState> = (state: ModelState) => void;
-type UseReducerState<ModelState> = [ModelState, OnUpdate<ModelState>];
-type UseReducerDispatchArgs<ModelState> = {
-  callback: SetStateCallback<ModelState>;
-  onUpdate: OnUpdate<ModelState>;
-};
-type GetModelState<ModelName, ModelState> = (
-  modelName: ModelName
-) => ModelState;
-type GetModelActions = any;
-type ModelReg<ModelState, ReturnedActions> = {
-  getState: () => ModelState;
-  getActions: () => ReturnedActions;
-};
-type ModelProviderProps<ModelName, ModelState, ReturnedActions> = {
-  children: React.ReactNode;
-  register: (
-    modelName: ModelName,
-    reg: ModelReg<ModelState, ReturnedActions>
-  ) => () => void;
-  getModelState: GetModelState<ModelName, any>;
-  getModelActions: GetModelActions;
-};
-type ModelConfig<State, Hook, Actions> = {
-  name: string;
-  initialState: State;
-  useAnything?: Hook;
-  actions: Actions;
-};
-type CombineModelsArgs<Models> = {
-  models: {
-    [ModelName in keyof Models]: Models[ModelName];
-  };
+type SetStateCallback<State> = (state: State) => State;
+type SetFn<State> = {
+  (callback: SetStateCallback<State>): Promise<State>;
+  <modelKey extends keyof State>(
+    modelKey: modelKey,
+    callback: SetStateCallback<State[modelKey]>
+  ): Promise<State[modelKey]>;
 };
 type ReturnedAction<Action> = Action extends (args: infer Args) => any
   ? Args extends { payload: infer Payload }
@@ -46,249 +16,180 @@ type ReturnedAction<Action> = Action extends (args: infer Args) => any
 type ReturnedActions<Actions> = {
   [ActionName in keyof Actions]: ReturnedAction<Actions[ActionName]>;
 };
-type _ActionArgs<State> = {
+type GetState<State> = () => State;
+type _ActionArgs<State, Actions> = {
   set: SetFn<State>;
-  getModelState: <ModelState = any>(modelName: string) => ModelState;
-  getModelActions: (modelName: string) => any;
+  actions: ReturnedActions<Actions>;
+  getState: GetState<State>;
 };
-export type ActionArgs<State, Payload = void> = Payload extends void
-  ? _ActionArgs<State>
-  : _ActionArgs<State> & {
+export type ActionArgs<
+  State,
+  Payload = void,
+  Actions = any
+> = Payload extends void
+  ? _ActionArgs<State, Actions>
+  : _ActionArgs<State, Actions> & {
       payload: Payload;
     };
+type State<Models> = {
+  [modelKey in keyof Models]: Models[modelKey];
+};
 
 function stub<Return>(_: any): Return {
   return {} as Return;
 }
 
-/**
- * This is an abstraction over React Context and useReducer.
- *
- * When you call createModel, 2 contexts are created for that model: StateContext and ActionsContext.
- *
- * StateContext holds the state of the model, and ActionsContext holds the actions for that model.
- *
- * The split between contexts for state and actions is done for performance reasons. ( actions have a stable reference,
- * so the ActionsContext will never update, so if you only need actions in your component, you can just call useModelActions() ).
- *
- * Actions are just functions that can update the model's state, and which you can call directly from your components.
- * Actions can be async or sync, and the set function returns a Promise which resolves when the state gets updated.
- * You can set the state inside the action multiple times.
- *
- * The useAnything hook can be used to react to state changes in the model, or even create computed fields in your state,
- * because what gets returned from useAnything is passed into the StateContext.
- *
- * @param model An object with name, initialState, actions, and useAnything hook.
- *
- * @returns A Provider component which holds the model's state and renders the state and actions contexts,
- *  and hooks for reading the model's state and actions ( useModel, useModelState, useModelActions ).
- */
-export function createModel<
-  State,
-  UseAnything extends (args: {
-    state: State;
+export function createStore<
+  Models,
+  Actions,
+  UseRedonk extends (args: {
+    state: State<Models>;
     actions: ReturnedActions<Actions>;
-    set: SetFn<State>;
-    getModelState: GetModelState<string, any>;
-    getModelActions: GetModelActions;
-  }) => any,
-  Actions
->(model: ModelConfig<State, UseAnything, Actions>) {
-  const stateContext = React.createContext<State & ReturnType<UseAnything>>(
-    model.initialState as State & ReturnType<UseAnything>
+    set: SetFn<State<Models>>;
+  }) => any
+>({
+  models = {} as Models,
+  actions = {} as Actions,
+  useRedonk,
+}: {
+  models: Models;
+  actions: Actions;
+  useRedonk?: UseRedonk;
+}) {
+  if (Object.keys(models).length === 0) {
+    console.error('[Redonk] You must pass at least one model to createStore!');
+  }
+
+  const [modelContexts, initialState] = Object.entries(models).reduce(
+    (prev, [modelKey, initialState]) => {
+      const stateContext = React.createContext(initialState);
+      stateContext.displayName = `${modelKey}.state`;
+      prev[0][modelKey] = {
+        stateContext,
+      };
+      prev[1][modelKey] = initialState;
+      return prev;
+    },
+    [{}, {}] as any
   );
+
   const actionsContext = React.createContext<ReturnedActions<Actions>>(
     {} as ReturnedActions<Actions>
   );
-  stateContext.displayName = `${model.name}.state`;
-  actionsContext.displayName = `${model.name}.actions`;
+  actionsContext.displayName = 'actions';
+  const useRedonkContext = React.createContext<ReturnType<UseRedonk>>(
+    {} as ReturnType<UseRedonk>
+  );
+  useRedonkContext.displayName = 'UseRedonk';
 
-  function Provider({
-    children,
-    register,
-    getModelState: _getModelState,
-    getModelActions: _getModelActions,
-  }: ModelProviderProps<string, State, ReturnedActions<Actions>>) {
+  function Provider({ children }: { children: React.ReactNode }) {
     const [[state, onUpdate], dispatch] = React.useReducer(
-      (
-        [state]: UseReducerState<State>,
-        { callback, onUpdate }: UseReducerDispatchArgs<State>
-      ) => {
-        return [callback(state), onUpdate] as UseReducerState<State>;
+      ([state]: any, { cb, modelKey, onUpdate }: any) => {
+        if (modelKey && typeof modelKey === 'string') {
+          return [
+            {
+              ...state,
+              [modelKey]: cb(state[modelKey]),
+            },
+            { cb: onUpdate, modelKey },
+          ];
+        }
+        return [cb(state), onUpdate];
       },
-      [model.initialState, () => {}]
+      [initialState, stub]
     );
 
-    function getModelState(modelName: string) {
-      if (model.name === modelName) {
-        return state;
-      }
-      if (typeof _getModelState !== 'function') {
-        console.error(
-          `You must call combineModels() in order to get the state of other models. Called getModelState("${modelName}") from "${model.name}" model.`
-        );
-        return;
-      }
-      try {
-        const modelState = _getModelState(modelName);
-        return modelState;
-      } catch (err) {
-        console.error(
-          `Model "${modelName}" is not registered. Called getModelState("${modelName}") from "${model.name}" model.`
-        );
-      }
-    }
+    React.useEffect(() => {
+      stateRef.current = state;
+      if (typeof onUpdate === 'function') {
+        onUpdate(state);
+      } else onUpdate.cb(state[onUpdate.modelKey]);
+    }, [state, onUpdate]);
 
-    function getModelActions(modelName: string) {
-      if (model.name === modelName) {
-        return actionsRef.current;
-      }
-      if (typeof _getModelActions !== 'function') {
-        console.error(
-          `You must call combineModels() in order to get the actions of other models. Called getModelActions("${modelName}") from "${model.name}" model.`
-        );
-        return;
-      }
-      try {
-        const modelActions = _getModelActions(modelName);
-        return modelActions;
-      } catch (err) {
-        console.error(
-          `Model "${modelName}" is not registered. Called getModelActions("${modelName}") from "${model.name}" model.`
-        );
-      }
-    }
+    const stateRef = React.useRef<any>(initialState);
 
-    const setRef = React.useRef(async (callback: SetStateCallback<State>) => {
-      let resolve: (state: State) => void;
-      let promise = new Promise<State>(r => {
+    const getStateRef = React.useRef<any>(() => stateRef.current);
+
+    const setRef = React.useRef<any>(async (cbOrModelKey: any, cb: any) => {
+      let resolve: (state: any) => void;
+      let promise = new Promise(r => {
         resolve = r;
       });
-      dispatch({
-        callback,
-        onUpdate: state => {
-          resolve(state);
-        },
-      });
+      if (typeof cbOrModelKey === 'function') {
+        dispatch({
+          cb: cbOrModelKey,
+          onUpdate: (state: any) => {
+            resolve(state);
+          },
+        });
+      } else {
+        dispatch({
+          modelKey: cbOrModelKey,
+          cb,
+          onUpdate: (state: any) => {
+            resolve(state);
+          },
+        });
+      }
       return promise;
     });
 
-    const actionsRef = React.useRef<ReturnedActions<Actions>>(
-      Object.entries<any>(model.actions).reduce((actions, [name, action]) => {
-        actions[name] = (payload: number) =>
+    const actionsRef = React.useRef(
+      Object.entries<any>(actions).reduce<any>((prev, [actionName, action]) => {
+        prev[actionName] = (payload: any) =>
           action({
             set: setRef.current,
-            getModelState,
-            getModelActions,
             payload,
+            actions: actionsRef.current,
+            getState: getStateRef.current,
           });
-
-        return actions;
-      }, {} as any)
+        return prev;
+      }, {} as ReturnedActions<Actions>)
     );
 
-    React.useEffect(() => {
-      if (typeof register === 'function') {
-        return register(model.name, {
-          getState: () => state,
-          getActions: () => actionsRef.current,
-        });
-      }
-      return;
-    }, [state, register]);
+    let _useRedonk = stub;
+    if (typeof useRedonk === 'function') _useRedonk = useRedonk;
 
-    React.useEffect(() => {
-      if (onUpdate) onUpdate(state);
-    }, [state, onUpdate]);
-
-    let useAnything = stub;
-    if (typeof model.useAnything === 'function')
-      useAnything = model.useAnything;
-
-    const useAnythingReturn = useAnything<ReturnType<UseAnything>>({
+    const useRedonkReturn = _useRedonk<ReturnType<UseRedonk>>({
       state,
-      set: setRef.current,
       actions: actionsRef.current,
-      getModelState,
-      getModelActions,
+      set: setRef.current,
     });
 
-    return (
-      <stateContext.Provider value={{ ...state, ...useAnythingReturn }}>
+    return Object.entries<any>(modelContexts).reduce(
+      (prev, [modelKey, contextConfig]) => {
+        prev = React.createElement(
+          contextConfig.stateContext.Provider,
+          {
+            value: state[modelKey],
+          },
+          prev
+        );
+        return prev;
+      },
+      <useRedonkContext.Provider value={useRedonkReturn}>
         <actionsContext.Provider value={actionsRef.current}>
           {children}
         </actionsContext.Provider>
-      </stateContext.Provider>
+      </useRedonkContext.Provider>
     );
   }
-  Provider.displayName = `${model.name}.Provider`;
 
-  function useModelState() {
-    return React.useContext(stateContext);
+  Provider.displayName = 'RedonkProvider';
+
+  function useModelState<modelKey extends keyof Models>(
+    modelKey: modelKey
+  ): Models[modelKey] {
+    return React.useContext(modelContexts[modelKey]?.stateContext ?? {});
   }
 
-  function useModelActions() {
+  function useActions() {
     return React.useContext(actionsContext);
   }
 
-  function useModel() {
-    return {
-      state: useModelState(),
-      actions: useModelActions(),
-    };
+  function useRedonkHook() {
+    return React.useContext(useRedonkContext);
   }
 
-  return {
-    useModelState,
-    useModelActions,
-    useModel,
-    Provider,
-  };
-}
-
-/**
- * Used to combine all the models into a single Provider component, and get a
- * redux-like API ( similar to slices in redux )
- *
- * @param models A dictionary of the models.
- * @returns A Provider which renders all of the registered models' Providers and is used to
- * create a connection between the models ( getModelState, getModelActions )
- */
-export function combineModels<Models>({ models }: CombineModelsArgs<Models>) {
-  function Provider({ children }: { children: React.ReactNode }) {
-    const providerRefs = React.useRef<any>({});
-
-    function register(modelName: string, reg: any) {
-      providerRefs.current[modelName] = reg;
-      return () => delete providerRefs.current[modelName];
-    }
-
-    function getModelState(modelName: keyof Models) {
-      const ref = providerRefs.current[modelName];
-      if (ref) {
-        return ref.getState();
-      }
-      throw new Error(`"${modelName}" model not registered in combineModels()`);
-    }
-
-    function getModelActions(modelName: keyof Models) {
-      const ref = providerRefs.current[modelName];
-      if (ref) {
-        return ref.getActions();
-      }
-      throw new Error(`"${modelName}" model not registered in combineModels()`);
-    }
-
-    return Object.values<any>(models).reduce((prev, current) => {
-      prev = React.createElement(current.Provider, {
-        register,
-        getModelState,
-        getModelActions,
-        children: prev,
-      });
-      return prev;
-    }, children);
-  }
-
-  return { Provider };
+  return { Provider, useModelState, useActions, useRedonk: useRedonkHook };
 }
