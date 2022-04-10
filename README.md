@@ -15,7 +15,7 @@ yarn add redonk
 
 ## **Highlights**
 
-- Pure React state and context and only around **3.5kB** in production (**Redux** usually adds around **17kB**)
+- Pure React state and context and only around **900B** in production (**Redux** usually adds around **17kB**)
 - Good performance - optimized by splitting models' state and actions into separate contexts
 - Nice, structured API similar to **@reduxjs/toolkit**
 - Very simple to use
@@ -33,7 +33,7 @@ for creating contexts and state, but gave it structure and pattern similar to **
 
 Differences between this and **@reduxjs/toolkit** (and **redux** in general):
 
-- This library is pure React and only around **3.5kB** in production.
+- This library is pure React and only around **900B** in production.
 - There aren't any **_selectors_** - you just subscribe to the whole state of a single model, or just actions (which never change). This should be a good enough performance optimization as you often tend to use multiple fields from a single **redux** slice in your component. This also simplifies things quite a bit as you can just get the state you need without having to deal with memoization and using **reselect**.
 
 - **_Actions_** in this library are not case reducers. They're basically just like functions that you define
