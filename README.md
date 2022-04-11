@@ -218,15 +218,6 @@ useRedonk: ({ state }) => {
 
 Or anything else really, be creative!
 
-### **_useRedonkState: () => State_**
-
-Hook for getting the entire state of Redonk. Causes a render on every state update, so use wisely!
-
-```tsx
-// inside component
-const entireState = useRedonkState();
-```
-
 ## _Action and useRedonk args_:
 
 ### **_set: (callback: (state: State) => State) => Promise\<State\>_**
@@ -332,6 +323,15 @@ Returns whatever you returned from the **useRedonk** hook defined when creating 
 
 ```tsx
 const useRedonkReturn = useRedonk();
+```
+
+### **_useRedonkState: () => State_**
+
+Hook for getting the entire state of Redonk. Causes a render on every state update, so use wisely!
+
+```tsx
+// inside component
+const entireState = useRedonkState();
 ```
 
 ---
