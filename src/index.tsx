@@ -81,6 +81,8 @@ export function createStore<
     {} as ReturnType<UseRedonk>
   );
   useRedonkContext.displayName = 'UseRedonk';
+  const stateContext = React.createContext<State<Models>>(initialState);
+  stateContext.displayName = 'RedonkState';
 
   function Provider({ children }: { children: React.ReactNode }) {
     const [[state, onUpdate], dispatch] = React.useReducer(
@@ -169,7 +171,9 @@ export function createStore<
       },
       <useRedonkContext.Provider value={useRedonkReturn}>
         <actionsContext.Provider value={actionsRef.current}>
-          {children}
+          <stateContext.Provider value={state}>
+            {children}
+          </stateContext.Provider>
         </actionsContext.Provider>
       </useRedonkContext.Provider>
     );
@@ -191,5 +195,15 @@ export function createStore<
     return React.useContext(useRedonkContext);
   }
 
-  return { Provider, useModelState, useActions, useRedonk: useRedonkHook };
+  function useRedonkState() {
+    return React.useContext(stateContext);
+  }
+
+  return {
+    Provider,
+    useModelState,
+    useActions,
+    useRedonk: useRedonkHook,
+    useRedonkState,
+  };
 }
