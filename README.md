@@ -171,8 +171,6 @@ const someNumber = someAction();
 
 ### **_useRedonk: ({ state, actions, set }) => any_**
 
-<br />
-
 This hook is called inside the Provider component and you have access to everything inside the "store".
 It get's called any time the state is updated.
 What you return from this function gets passed in the UseRedonk context, and you can access it with **useRedonk** hook.
@@ -220,9 +218,7 @@ useRedonk: ({ state }) => {
 
 Or anything else really, be creative!
 
-<br />
-
-### **_useRedonk: ({ state, actions, set }) => any_**
+### **_useRedonkState: () => State_**
 
 Hook for getting the entire state of Redonk. Causes a render on every state update, so use wisely!
 
