@@ -47,7 +47,7 @@ Differences between this and **@reduxjs/toolkit** (and **redux** in general):
 
 The library only exports one function!
 
-### **_createStore({ models, actions, useRedonk }) => { Provider, useModelState, useActions, useRedonk, useRedonkState }_**
+### **_createStore({ models, actions, useRedonk }) => { Provider, useModelState, useActions, useRedonkReturn, useRedonkState }_**
 
 <br />
 
@@ -61,7 +61,8 @@ This function does the following things:
 - Creates three hooks for consuming state and actions:
   - **useModelState** which accepts a **modelKey** to know to which model's context to subscribe to
   - **useActions** for subscribing to the actions context
-  - **useRedonk** for subscribing to the useRedonk context for getting what was returned from the **useRedonk** hook
+  - **useRedonkReturn** for subscribing to the useRedonk context for getting what was returned from the **useRedonk** hook
+  - **useRedonkState** for subscribing to the whole Redonk state. Causes a render on every state update.
 
 ```tsx
 import { createStore } from 'redonk';
@@ -70,7 +71,7 @@ const {
   Provider,
   useModelState,
   useActions,
-  useRedonk,
+  useRedonkReturn,
   useRedonkState,
 } = createStore({
   models: {
@@ -317,12 +318,12 @@ Returns all of the actions.
 const actions = useActions();
 ```
 
-### **_useRedonk()_**
+### **_useRedonkReturn()_**
 
 Returns whatever you returned from the **useRedonk** hook defined when creating the store.
 
 ```tsx
-const useRedonkReturn = useRedonk();
+const whatWasReturnedFromUseRedonk = useRedonkReturn();
 ```
 
 ### **_useRedonkState: () => State_**
@@ -424,7 +425,7 @@ const counterState = useModelState('counter'); // counter state is correctly inf
 
 const actions = useActions(); // actions are correctly inferred including the type of Payload
 
-const useRedonkReturn = useRedonk(); // correctly inferred
+const whatWasReturnedFromUseRedonk = useRedonkReturn(); // correctly inferred
 
 const entireState = useRedonkState(); // correctly inferred as AppState
 ```
