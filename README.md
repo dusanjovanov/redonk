@@ -47,7 +47,7 @@ Differences between this and **@reduxjs/toolkit** (and **redux** in general):
 
 The library only exports one function!
 
-### **_createStore({ models, actions, useRedonk }) => { Provider, useModelState, useActions, useRedonk }_**
+### **_createStore({ models, actions, useRedonk }) => { Provider, useModelState, useActions, useRedonk, useRedonkState }_**
 
 <br />
 
@@ -66,7 +66,13 @@ This function does the following things:
 ```tsx
 import { createStore } from 'redonk';
 
-const { Provider, useModelState, useActions, useRedonk } = createStore({
+const {
+  Provider,
+  useModelState,
+  useActions,
+  useRedonk,
+  useRedonkState,
+} = createStore({
   models: {
     count: 0,
   },
@@ -215,6 +221,15 @@ useRedonk: ({ state }) => {
 Or anything else really, be creative!
 
 <br />
+
+### **_useRedonk: ({ state, actions, set }) => any_**
+
+Hook for getting the entire state of Redonk. Causes a render on every state update, so use wisely!
+
+```tsx
+// inside component
+const entireState = useRedonkState();
+```
 
 ## _Action and useRedonk args_:
 
@@ -414,6 +429,8 @@ const counterState = useModelState('counter'); // counter state is correctly inf
 const actions = useActions(); // actions are correctly inferred including the type of Payload
 
 const useRedonkReturn = useRedonk(); // correctly inferred
+
+const entireState = useRedonkState(); // correctly inferred as AppState
 ```
 
 ## **Types**
