@@ -33,7 +33,7 @@ const Counter = () => {
 const App = () => {
   return (
     <Provider>
-      <Counter />;
+      <Counter />
     </Provider>
   );
 };
