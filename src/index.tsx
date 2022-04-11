@@ -203,7 +203,7 @@ export function createStore<
     Provider,
     useModelState,
     useActions,
-    useRedonk: useRedonkHook,
+    useRedonkReturn: useRedonkHook,
     useRedonkState,
   };
 }
