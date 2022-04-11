@@ -36,6 +36,10 @@
   "name": "redonk",
   "author": "Dusan Jovanov",
   "description": "Ridiculously simple state management in pure React 🎉",
+  "keywords": [
+    "react",
+    "state"
+  ],
   "repository": {
     "url": "https://github.com/dusanjovanov/redonk"
   },
