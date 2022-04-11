@@ -3,6 +3,8 @@
 Ridiculously simple state management in pure React 🎉
 <br />
 
+[DEMO](https://codesandbox.io/s/redonk-example-5gmjmx)
+
 ## **Installation**
 
 ```bash
