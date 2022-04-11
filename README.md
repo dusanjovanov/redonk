@@ -174,7 +174,7 @@ const someNumber = someAction();
 
 This hook is called inside the Provider component and you have access to everything inside the "store".
 It get's called any time the state is updated.
-What you return from this function gets passed in the UseRedonk context, and you can access it with **useRedonk** hook.
+What you return from this function gets passed in the UseRedonk context, and you can access it with **useRedonkReturn** hook.
 
 <br />
 
