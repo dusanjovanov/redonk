@@ -468,3 +468,19 @@ type State<Models> = {
   [modelKey in keyof Models]: Models[modelKey];
 };
 ```
+
+## **Changelog**
+
+### v2.0.0
+
+- Renamed the hook for cosuming what was returned from **useRedonk** as defined in **createStore** to **useRedonkReturn** to avoid confusion.
+
+```tsx
+// inside component
+
+// used to be this
+const whatWasReturnedFromUseRedonk = useRedonk(); // confusing, same name as the hook that get's called inside of the Provider component
+
+// now it's this
+const whatWasReturnedFromUseRedonk = useRedonkReturn(); // much clearer 😉
+```
