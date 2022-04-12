@@ -34,27 +34,25 @@ export type ActionArgs<
 type State<Models> = {
   [modelKey in keyof Models]: Models[modelKey];
 };
+export type HookArgs<State, Actions = any> = {
+  state: State;
+  actions: ReturnedActions<Actions>;
+  set: SetFn<State>;
+};
+type GetReturnType<T> = T extends (...args: any[]) => infer U ? U : never;
 
 function stub<Return>(_: any): Return {
   return {} as Return;
 }
 
-export function createStore<
-  Models,
-  Actions,
-  UseRedonk extends (args: {
-    state: State<Models>;
-    actions: ReturnedActions<Actions>;
-    set: SetFn<State<Models>>;
-  }) => any
->({
+export function createStore<Models, Actions, Hooks>({
   models = {} as Models,
   actions = {} as Actions,
-  useRedonk,
+  hooks = {} as Hooks,
 }: {
   models: Models;
   actions: Actions;
-  useRedonk?: UseRedonk;
+  hooks?: Hooks;
 }) {
   if (Object.keys(models).length === 0) {
     console.error('[Redonk] You must pass at least one model to createStore!');
@@ -64,23 +62,49 @@ export function createStore<
     (prev, [modelKey, initialState]) => {
       const stateContext = React.createContext(initialState);
       stateContext.displayName = `${modelKey}.state`;
-      prev[0][modelKey] = {
-        stateContext,
-      };
+      prev[0][modelKey] = stateContext;
       prev[1][modelKey] = initialState;
       return prev;
     },
     [{}, {}] as any
   );
 
+  const hooksConfig = Object.entries<any>(hooks).reduce(
+    (prev, [hookKey, useHook]) => {
+      const hookContext = React.createContext({});
+      hookContext.displayName = `${hookKey}`;
+      const Comp = ({
+        children,
+        state,
+        actions,
+        set,
+      }: {
+        children: React.ReactNode;
+        state: State<Models>;
+        actions: ReturnedActions<Actions>;
+        set: SetFn<State<Models>>;
+      }) => {
+        const hookReturn = useHook({ state, actions, set });
+        return (
+          <hookContext.Provider value={hookReturn}>
+            {children}
+          </hookContext.Provider>
+        );
+      };
+      Comp.displayName = `${hookKey}.Component`;
+      prev[hookKey] = {
+        hookContext,
+        Comp,
+      };
+      return prev;
+    },
+    {} as any
+  );
+
   const actionsContext = React.createContext<ReturnedActions<Actions>>(
     {} as ReturnedActions<Actions>
   );
-  actionsContext.displayName = 'actions';
-  const useRedonkContext = React.createContext<ReturnType<UseRedonk>>(
-    {} as ReturnType<UseRedonk>
-  );
-  useRedonkContext.displayName = 'UseRedonk';
+  actionsContext.displayName = 'RedonkActions';
   const stateContext = React.createContext<State<Models>>(initialState);
   stateContext.displayName = 'RedonkState';
 
@@ -149,33 +173,43 @@ export function createStore<
       }, {} as ReturnedActions<Actions>)
     );
 
-    let _useRedonk = stub;
-    if (typeof useRedonk === 'function') _useRedonk = useRedonk;
+    function buildModelProviderTree(children: React.ReactNode) {
+      return Object.entries<any>(modelContexts).reduce(
+        (p, [modelKey, modelStateContext]) => {
+          p = React.createElement(
+            modelStateContext.Provider,
+            {
+              value: state[modelKey],
+            },
+            p
+          );
+          return p;
+        },
+        children
+      );
+    }
 
-    const useRedonkReturn = _useRedonk<ReturnType<UseRedonk>>({
-      state,
-      actions: actionsRef.current,
-      set: setRef.current,
-    });
-
-    return Object.entries<any>(modelContexts).reduce(
-      (prev, [modelKey, contextConfig]) => {
-        prev = React.createElement(
-          contextConfig.stateContext.Provider,
+    function buildHookComponentTree(children: React.ReactNode) {
+      return Object.values<any>(hooksConfig).reduce((p, hookConfig) => {
+        p = React.createElement(
+          hookConfig.Comp,
           {
-            value: state[modelKey],
+            state,
+            actions: actionsRef.current,
+            set: setRef.current,
           },
-          prev
+          p
         );
-        return prev;
-      },
-      <useRedonkContext.Provider value={useRedonkReturn}>
+        return p;
+      }, children);
+    }
+
+    return (
+      <stateContext.Provider value={state}>
         <actionsContext.Provider value={actionsRef.current}>
-          <stateContext.Provider value={state}>
-            {children}
-          </stateContext.Provider>
+          {buildModelProviderTree(buildHookComponentTree(children))}
         </actionsContext.Provider>
-      </useRedonkContext.Provider>
+      </stateContext.Provider>
     );
   }
 
@@ -191,8 +225,10 @@ export function createStore<
     return React.useContext(actionsContext);
   }
 
-  function useRedonkHook() {
-    return React.useContext(useRedonkContext);
+  function useHookReturn<HookKey extends keyof Hooks>(
+    hookKey: HookKey
+  ): GetReturnType<Hooks[HookKey]> {
+    return React.useContext(hooksConfig[hookKey].hookContext);
   }
 
   function useRedonkState() {
@@ -203,7 +239,7 @@ export function createStore<
     Provider,
     useModelState,
     useActions,
-    useRedonkReturn: useRedonkHook,
+    useHookReturn,
     useRedonkState,
   };
 }
