@@ -3,7 +3,7 @@
 Ridiculously simple state management in pure React 🎉
 <br />
 
-[DEMO](https://codesandbox.io/s/redonk-example-5gmjmx)
+[Example demo with Counter and Todos](https://codesandbox.io/s/redonk-example-5gmjmx)
 
 ## **Installation**
 
@@ -17,13 +17,139 @@ yarn add redonk
 
 ## **Highlights**
 
-- Pure React state and context and only around **900B** in production (**Redux** usually adds around **17kB**)
-- Good performance - optimized by splitting models' state and actions into separate contexts
+- Pure React state and context and only around **1kB** in production (**Redux** usually adds around **17kB**)
+- Good performance - optimized by splitting state into separate contexts
 - Nice, structured API similar to **@reduxjs/toolkit**
 - Very simple to use
 - No selectors
 - No thunks or other special async stuff - you can do anything with just actions
 - Full Typescript support
+
+## **Quickstart**
+
+1. Create the store
+
+```tsx
+// store.jsx
+export const {
+  Provider,
+  useModelState,
+  useActions,
+  useHookReturn,
+  useRedonkState,
+} = createStore({
+  models: {
+    count: 0,
+    todos: {
+      items: [{ id: '1', text: 'Learn React', isDone: false }],
+    },
+  },
+  actions: {
+    increment: ({ set }) => {
+      set(state => ({ ...state, count: state.count + 1 }));
+    },
+    decrement: ({ set }) => {
+      set(state => ({ ...state, count: state.count - 1 }));
+    },
+    addTodo: ({ set, payload }) => {
+      set('todos', state => ({ ...state, items: [...state.items, payload] }));
+    },
+  },
+  hooks: {
+    useDoubleCount: ({ state }) => {
+      return useMemo(() => {
+        return state.count * 2;
+      }, [state.count]);
+    },
+    useSomeEffect: ({ state }) => {
+      useEffect(() => {
+        console.log('State changed');
+      }, [state]);
+    },
+  },
+});
+```
+
+2. Wrap your component tree with the returned **Provider**
+
+```tsx
+// app.jsx
+import { Provider } from './store';
+import { Counter } from './Counter';
+import { Todos } from './Todos';
+
+const App = () => {
+  return (
+    <Provider>
+      <Counter />
+      <Todos />
+    </Provider>
+  );
+};
+```
+
+3. And just use your state, actions and computed fields !!! 🥳
+
+```tsx
+  // counter.jsx
+  import {useModelState, useActions, useHookReturn } from "./store"
+
+  export const Counter = () => {
+    const count = useModelState("count")
+    const {increment, decrement} = useActions()
+    const doubleCount = useHookReturn("useDoubleCount")
+
+    return (
+      <div>
+        <button onClick={decrement}>-</button>
+        <div>{count}</count>
+        <button onClick={increment}>+</button>
+        <div>Double count: {doubleCount}</div>
+      </div>
+    )
+  }
+
+  // todos.jsx
+
+  import {useModelState, useActions} from "./store"
+
+  export const Todos = () => {
+    const {items: todos} = useModelState("todos")
+    const {addTodo} = useActions()
+
+    return (
+      <div>
+        <ul>
+          {todos.map(todo => (
+            <li key={todo.id}>
+              {todo.text}
+              {todo.isDone && "✅"}
+            </li>
+          ))}
+        </ul>
+        <button onClick={() =>
+          addTodo({
+            id: Date.now().toString(),
+            text: "New todo",
+            isDone: false
+          })}>
+          Add todo
+        </button>
+      </div>
+    )
+  }
+```
+
+## **Brief explanation of what happened in the quickstart**
+
+When we called **createStore**, because we defined two models ("count", "todos"), two contexts were created to hold the values for those slices of state.
+**Redonk** only has a single state inside a **useReducer**, but it solves performance issues of context by passing slices of state to separate contexts. You can subscribe to a model (or slice) of state by calling **useModelState** and passing the name of the model (ie. useModel("todos"))
+
+Next, actions that we defined get passed in their own context and are consumed by **useActions** hook. Actions are memoized, so the actions context never updates and never causes a render.
+
+For each hook that we defined, a context is created to pass the value of what you returned from each of the hooks. You can subscribe to the return values of hooks with **useHookReturn** by passing the name of the hook (ie. useHookReturn("useDoubleCount")).
+
+Finally, a state context is created with the whole state passed in it, and you can get the whole state with **useRedonkState**.
 
 ## **Idea**
 
@@ -35,7 +161,7 @@ for creating contexts and state, but gave it structure and pattern similar to **
 
 Differences between this and **@reduxjs/toolkit** (and **redux** in general):
 
-- This library is pure React and only around **900B** in production.
+- This library is pure React and only around **1kB** in production.
 
 - There aren't any **_selectors_** - you just subscribe to the whole state of a single model, or just actions (which never change). This should be a good enough performance optimization as you often tend to use multiple fields from a single **redux** slice in your component. This also simplifies things quite a bit as you can just get the state you need without having to deal with memoization and using **reselect**.
 
@@ -47,21 +173,21 @@ Differences between this and **@reduxjs/toolkit** (and **redux** in general):
 
 The library only exports one function!
 
-### **_createStore({ models, actions, useRedonk }) => { Provider, useModelState, useActions, useRedonkReturn, useRedonkState }_**
+### **_createStore({ models, actions, hooks }) => { Provider, useModelState, useActions, useHookReturn, useRedonkState }_**
 
 <br />
 
 This function does the following things:
 
 - Creates the state with useReducer
-- Creates a state context for each of the models defined, and passes the corresponding slice of state to each of those models
+- Creates a state context for each of the models defined, and passes the corresponding slice of state to each of those contexts
 - Creates an actions context and passes a modified version of the actions defined in it ( actions never change their ref, so this context never gets updated )
-- Creates a useRedonk context which holds the value that was returned from the **useRedonk** hook
+- Creates a context for each of the hooks defined which holds the value that was returned from those hooks
 - Creates the Provider component which holds the state, and renders all of the contexts.
-- Creates three hooks for consuming state and actions:
+- Creates these hooks for consuming state, actions, and hook return values:
   - **useModelState** which accepts a **modelKey** to know to which model's context to subscribe to
   - **useActions** for subscribing to the actions context
-  - **useRedonkReturn** for subscribing to the useRedonk context for getting what was returned from the **useRedonk** hook
+  - **useHookReturn** for subscribing to the return value of a hook.
   - **useRedonkState** for subscribing to the whole Redonk state. Causes a render on every state update.
 
 ```tsx
@@ -71,7 +197,7 @@ const {
   Provider,
   useModelState,
   useActions,
-  useRedonkReturn,
+  useHookReturn,
   useRedonkState,
 } = createStore({
   models: {
@@ -85,10 +211,12 @@ const {
       set(state => ({ ...state, count: state.count - 1 }));
     },
   },
-  useRedonk: ({ state }) => {
-    useEffect(() => {
-      console.log('State changed');
-    }, [state]);
+  hooks: {
+    useCountTimesTen: ({ state }) => {
+      return useMemo(() => {
+        return state.count * 10;
+      }, [state.count]);
+    },
   },
 });
 ```
@@ -98,6 +226,8 @@ const {
 ### **_models_**
 
 An object that defines how the state will be split into contexts.
+
+A model can be any value (primitive or object)
 
 In this example we will have two state contexts, one for _counter_ and the other for _todos_:
 
@@ -170,35 +300,27 @@ someAction: () => {
 const someNumber = someAction();
 ```
 
-### **_useRedonk: ({ state, actions, set }) => any_**
+### **_hooks_**
 
-This hook is called inside the Provider component and you have access to everything inside the "store".
-It get's called any time the state is updated.
-What you return from this function gets passed in the UseRedonk context, and you can access it with **useRedonkReturn** hook.
+For each of these hooks, a context will be created. All of the hooks will be called on every state update, and what you return from them will be passed in their contexts.
 
 <br />
 
-You can use it for computed fields:
+You can use them for computed fields:
 
 ```tsx
-useRedonk: ({ state }) => {
-  const filteredTodos = useMemo(() => {
+useFilteredTodos: ({ state }) => {
+  return useMemo(() => {
     return state.todos.items.filter(todo => {
       if (state.todos.filter === 'active') return !todo.isDone;
       if (state.todos.filter === 'completed') return todo.isDone;
       return true;
     });
   }, [state.todos.items, state.todos.filter]);
-
-  // needs to be memoized because we are returning a new object
-  // if we didn't memoize it, the UseRedonk context would update every time the state updates!
-  return useMemo(() => {
-    return { filteredTodos }
-  }, [filteredTodos]);
 };
 
 // and then in your component
-const { filteredTodos } = useRedonk();
+const filteredTodos = useHookReturn("useFilteredTodos");
 
 return (
   <>
@@ -210,16 +332,16 @@ return (
 For effects:
 
 ```tsx
-useRedonk: ({ state }) => {
+useSomeEffect: ({ state }) => {
   useEffect(() => {
     // do something when state changes
   }, [state]);
 };
 ```
 
-Or anything else really, be creative!
+Or anything else really, be creative! 🎨
 
-## _Action and useRedonk args_:
+## _Action and hook args_:
 
 ### **_set: (callback: (state: State) => State) => Promise\<State\>_**
 
@@ -304,7 +426,7 @@ return (
 
 ### **_useModelState( modelKey: string )_**
 
-Returns the state of the model which key was passed in.
+Returns the state of the model whose key you passed in.
 
 ```tsx
 const counterState = useModelState('counter');
@@ -318,12 +440,12 @@ Returns all of the actions.
 const actions = useActions();
 ```
 
-### **_useRedonkReturn()_**
+### **_useHookReturn( hookKey: string )_**
 
-Returns whatever you returned from the **useRedonk** hook defined when creating the store.
+Returns whatever you returned from the hook whose key you passed in.
 
 ```tsx
-const whatWasReturnedFromUseRedonk = useRedonkReturn();
+const whatWasReturnedFromThatHook = useHookReturn('thatHook');
 ```
 
 ### **_useRedonkState: () => State_**
@@ -417,6 +539,22 @@ createStore({
 });
 ```
 
+You alsooo need to define the types of the hook arguments:
+
+```tsx
+import { createStore, HookArgs } from 'redonk';
+
+createStore({
+  hooks: {
+    // pass the state type to HookArgs
+    useWhatever: ({ state, set }: HookArgs<AppState>) => {
+      // state and set types are correctly inferred
+      return Math.random();
+    },
+  },
+});
+```
+
 And voila! You have intellisense everywhere:
 
 ```tsx
@@ -425,7 +563,7 @@ const counterState = useModelState('counter'); // counter state is correctly inf
 
 const actions = useActions(); // actions are correctly inferred including the type of Payload
 
-const whatWasReturnedFromUseRedonk = useRedonkReturn(); // correctly inferred
+const whatWasReturnedFromUseWhatever = useHookReturn('useWhatever'); // correctly inferred as number
 
 const entireState = useRedonkState(); // correctly inferred as AppState
 ```
@@ -467,9 +605,49 @@ export type ActionArgs<
 type State<Models> = {
   [modelKey in keyof Models]: Models[modelKey];
 };
+export type HookArgs<State, Actions = any> = {
+  state: State;
+  actions: ReturnedActions<Actions>;
+  set: SetFn<State>;
+};
 ```
 
 ## **Changelog**
+
+### v3.0.0
+
+- 🎉 Added support for multiple hooks with separate contexts !
+
+For every hook, a separate context is created for it's return value - so you can do different computations, and because they are passed to different contexts, you can subscribe to the result of only one hook's return value with **useHookReturn**.
+
+⚠️ No more **useRedonkReturn** hook -> it's **useHookReturn** now ⚠️
+
+Example:
+
+```tsx
+createModel({
+  hooks: {
+    useFilteredTodos: ({ state }) => {
+      return React.useMemo(() => {
+        return state.todos.items.filter(todo => {
+          if (state.todos.filter === 'active') return !todo.isDone;
+          if (state.todos.filter === 'completed') return todo.isDone;
+          return true;
+        });
+      }, [state.todos]);
+    },
+    useSomeOtherCalculation: ({ state }) => {
+      return useMemo(() => {
+        // some other calculation
+      }, [state.someField]);
+    },
+  },
+});
+
+// ...And then inside your component
+
+const filteredTodos = useHookReturn('useFilteredTodos');
+```
 
 ### v2.0.0
 
@@ -483,4 +661,8 @@ const whatWasReturnedFromUseRedonk = useRedonk(); // confusing, same name as the
 
 // now it's this
 const whatWasReturnedFromUseRedonk = useRedonkReturn(); // much clearer 😉
+```
+
+```
+
 ```
