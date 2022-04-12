@@ -218,7 +218,7 @@ export function createStore<Models, Actions, Hooks>({
   function useModelState<modelKey extends keyof Models>(
     modelKey: modelKey
   ): Models[modelKey] {
-    return React.useContext(modelContexts[modelKey]?.stateContext ?? {});
+    return React.useContext(modelContexts[modelKey] ?? {});
   }
 
   function useActions() {
