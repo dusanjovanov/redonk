@@ -228,7 +228,7 @@ export function createStore<Models, Actions, Hooks>({
   function useHookReturn<HookKey extends keyof Hooks>(
     hookKey: HookKey
   ): GetReturnType<Hooks[HookKey]> {
-    return React.useContext(hooksConfig[hookKey].hookContext);
+    return React.useContext(hooksConfig[hookKey]?.hookContext ?? {});
   }
 
   function useRedonkState() {
