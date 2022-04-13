@@ -2,6 +2,11 @@
 
 Ridiculously simple state management in pure React 🎉
 <br />
+<br />
+
+[![npm](https://img.shields.io/npm/v/redonk?color=%231E90FF&label=npm&style=for-the-badge)](https://www.npmjs.com/package/redonk)
+
+<br />
 
 [Example demo with Counter and Todos](https://codesandbox.io/s/redonk-example-5gmjmx)
 
