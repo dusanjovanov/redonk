@@ -57,49 +57,43 @@ export function createStore<Models, Actions, Hooks>({
   if (Object.keys(models).length === 0) {
     console.error('[Redonk] You must pass at least one model to createStore!');
   }
+  const modelContexts: any = {};
+  const initialState: State<Models> = {} as State<Models>;
+  for (const [modelKey, _initialState] of Object.entries(models)) {
+    const stateContext = React.createContext(_initialState);
+    stateContext.displayName = modelKey;
+    modelContexts[modelKey] = stateContext;
+    (initialState as any)[modelKey] = _initialState;
+  }
 
-  const [modelContexts, initialState] = Object.entries(models).reduce(
-    (prev, [modelKey, initialState]) => {
-      const stateContext = React.createContext(initialState);
-      stateContext.displayName = `${modelKey}.state`;
-      prev[0][modelKey] = stateContext;
-      prev[1][modelKey] = initialState;
-      return prev;
-    },
-    [{}, {}] as any
-  );
-
-  const hooksConfig = Object.entries<any>(hooks).reduce(
-    (prev, [hookKey, useHook]) => {
-      const hookContext = React.createContext({});
-      hookContext.displayName = `${hookKey}`;
-      const Comp = ({
-        children,
-        state,
-        actions,
-        set,
-      }: {
-        children: React.ReactNode;
-        state: State<Models>;
-        actions: ReturnedActions<Actions>;
-        set: SetFn<State<Models>>;
-      }) => {
-        const hookReturn = useHook({ state, actions, set });
-        return (
-          <hookContext.Provider value={hookReturn}>
-            {children}
-          </hookContext.Provider>
-        );
-      };
-      Comp.displayName = `${hookKey}.Component`;
-      prev[hookKey] = {
-        hookContext,
-        Comp,
-      };
-      return prev;
-    },
-    {} as any
-  );
+  const hooksConfig: any = {};
+  for (const [hookKey, useHook] of Object.entries<any>(hooks)) {
+    const hookContext = React.createContext({});
+    hookContext.displayName = hookKey;
+    const Comp = ({
+      children,
+      state,
+      actions,
+      set,
+    }: {
+      children: React.ReactNode;
+      state: State<Models>;
+      actions: ReturnedActions<Actions>;
+      set: SetFn<State<Models>>;
+    }) => {
+      const hookReturn = useHook({ state, actions, set });
+      return (
+        <hookContext.Provider value={hookReturn}>
+          {children}
+        </hookContext.Provider>
+      );
+    };
+    (Comp as any).displayName = `${hookKey}.Component`;
+    hooksConfig[hookKey] = {
+      hookContext,
+      Comp,
+    };
+  }
 
   const actionsContext = React.createContext<ReturnedActions<Actions>>(
     {} as ReturnedActions<Actions>
@@ -110,14 +104,15 @@ export function createStore<Models, Actions, Hooks>({
 
   function Provider({ children }: { children: React.ReactNode }) {
     const [[state, onUpdate], dispatch] = React.useReducer(
-      ([state]: any, { cb, modelKey, onUpdate }: any) => {
-        if (modelKey && typeof modelKey === 'string') {
+      ([state]: any, args: any) => {
+        const { cb, modelKey, onUpdate } = args;
+        if ('modelKey' in args && typeof modelKey === 'string') {
           return [
             {
               ...state,
               [modelKey]: cb(state[modelKey]),
             },
-            { cb: onUpdate, modelKey },
+            onUpdate,
           ];
         }
         return [cb(state), onUpdate];
@@ -127,9 +122,7 @@ export function createStore<Models, Actions, Hooks>({
 
     React.useEffect(() => {
       stateRef.current = state;
-      if (typeof onUpdate === 'function') {
-        onUpdate(state);
-      } else onUpdate.cb(state[onUpdate.modelKey]);
+      if (typeof onUpdate === 'function') onUpdate(state);
     }, [state, onUpdate]);
 
     const stateRef = React.useRef<any>(initialState);
@@ -138,70 +131,72 @@ export function createStore<Models, Actions, Hooks>({
 
     const setRef = React.useRef<any>(async (cbOrModelKey: any, cb: any) => {
       let resolve: (state: any) => void;
-      let promise = new Promise(r => {
+      let promise = new Promise<State<Models>>(r => {
         resolve = r;
       });
       if (typeof cbOrModelKey === 'function') {
         dispatch({
           cb: cbOrModelKey,
-          onUpdate: (state: any) => {
-            resolve(state);
-          },
+          onUpdate: (state: any) => resolve(state),
         });
       } else {
         dispatch({
           modelKey: cbOrModelKey,
           cb,
-          onUpdate: (state: any) => {
-            resolve(state);
-          },
+          onUpdate: (state: any) => resolve(state),
         });
       }
       return promise;
     });
 
     const actionsRef = React.useRef(
-      Object.entries<any>(actions).reduce<any>((prev, [actionName, action]) => {
-        prev[actionName] = (payload: any) =>
-          action({
-            set: setRef.current,
-            payload,
-            actions: actionsRef.current,
-            getState: getStateRef.current,
-          });
-        return prev;
-      }, {} as ReturnedActions<Actions>)
+      (() => {
+        let _actions: ReturnedActions<Actions> = {} as ReturnedActions<Actions>;
+        for (const [actionName, action] of Object.entries<any>(actions)) {
+          (_actions as any)[actionName] = (payload: any) =>
+            action({
+              set: setRef.current,
+              payload,
+              actions: actionsRef.current,
+              getState: getStateRef.current,
+            });
+        }
+        return _actions;
+      })()
     );
 
     function buildModelProviderTree(children: React.ReactNode) {
-      return Object.entries<any>(modelContexts).reduce(
-        (p, [modelKey, modelStateContext]) => {
-          p = React.createElement(
-            modelStateContext.Provider,
-            {
-              value: state[modelKey],
-            },
-            p
-          );
-          return p;
-        },
-        children
-      );
+      let tree = children;
+      const entries = Object.entries<any>(modelContexts);
+      for (let i = entries.length - 1; i >= 0; i--) {
+        const [modelKey, modelContext] = entries[i];
+        tree = React.createElement(
+          modelContext.Provider,
+          {
+            value: state[modelKey],
+          },
+          tree
+        );
+      }
+      return tree;
     }
 
     function buildHookComponentTree(children: React.ReactNode) {
-      return Object.values<any>(hooksConfig).reduce((p, hookConfig) => {
-        p = React.createElement(
+      let tree = children;
+      const values = Object.values<any>(hooksConfig);
+      for (let i = values.length - 1; i >= 0; i--) {
+        const hookConfig = values[i];
+        tree = React.createElement(
           hookConfig.Comp,
           {
             state,
             actions: actionsRef.current,
             set: setRef.current,
           },
-          p
+          tree
         );
-        return p;
-      }, children);
+      }
+      return tree;
     }
 
     return (
