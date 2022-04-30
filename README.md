@@ -1,4 +1,4 @@
-# **Redonk**
+![Redonk logo](https://github.com/dusanjovanov/redonk/blob/master/logo.png 'Redonk logo')
 
 Ridiculously simple state management in pure React 🎉
 <br />
