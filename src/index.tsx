@@ -92,7 +92,7 @@ export function createStore<
       console.error(
         `[Redonk] You called useSliceState with a slice key which was not passed to createStore`
       );
-    return React.useContext(slicesConfig[sliceKey].context ?? {});
+    return React.useContext(slicesConfig[sliceKey]?.context ?? {});
   }
 
   function useActions() {
