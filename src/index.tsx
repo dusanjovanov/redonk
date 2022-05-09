@@ -30,10 +30,7 @@ export function createStore<
   for (const [sliceKey, _initialState] of Object.entries(slices)) {
     const context = React.createContext(_initialState);
     context.displayName = sliceKey;
-    slicesConfig[sliceKey] = {
-      context,
-      provider: <context.Provider value={_initialState} />,
-    };
+    slicesConfig[sliceKey] = context;
     (initialState as any)[sliceKey] = _initialState;
   }
   const actionsContext = React.createContext<Actions<Reducers>>(
@@ -63,8 +60,8 @@ export function createStore<
       const entries = Object.entries<any>(slicesConfig);
       for (let i = entries.length - 1; i >= 0; i--) {
         const [sliceKey, context] = entries[i];
-        tree = React.cloneElement(
-          context.provider,
+        tree = React.createElement(
+          context.Provider,
           {
             value: state[sliceKey],
           },
@@ -92,7 +89,7 @@ export function createStore<
       console.error(
         `[Redonk] You called useSliceState with a slice key which was not passed to createStore`
       );
-    return React.useContext(slicesConfig[sliceKey]?.context ?? {});
+    return React.useContext(slicesConfig[sliceKey] ?? {});
   }
 
   function useActions() {
