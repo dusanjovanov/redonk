@@ -304,7 +304,7 @@ createStore({
         ...state,
         counter: {
           ...state.counter,
-          count: state.counter.count + amount,
+          count: state.counter.count + payload,
         },
       };
     },
