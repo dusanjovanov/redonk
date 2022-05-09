@@ -1,197 +1,72 @@
 import * as React from 'react';
 
-type SetStateCallback<State> = (state: State) => State;
-type SetFn<State> = {
-  (callback: SetStateCallback<State>): Promise<State>;
-  <modelKey extends keyof State>(
-    modelKey: modelKey,
-    callback: SetStateCallback<State[modelKey]>
-  ): Promise<State[modelKey]>;
-};
-type ReturnedAction<Action> = Action extends (args: infer Args) => any
-  ? Args extends { payload: infer Payload }
-    ? (payload: Payload) => ReturnType<Action>
-    : () => ReturnType<Action>
+type Action<Reducer> = Reducer extends (
+  state: any,
+  payload: infer Payload
+) => any
+  ? (payload: Payload) => void
   : any;
-type ReturnedActions<Actions> = {
-  [ActionName in keyof Actions]: ReturnedAction<Actions[ActionName]>;
+type Actions<Reducers> = {
+  [ReducerName in keyof Reducers]: Action<Reducers[ReducerName]>;
 };
-type GetState<State> = () => State;
-type _ActionArgs<State, Actions> = {
-  set: SetFn<State>;
-  actions: ReturnedActions<Actions>;
-  getState: GetState<State>;
+type State<Slices> = {
+  [SliceKey in keyof Slices]: Slices[SliceKey];
 };
-export type ActionArgs<
-  State,
-  Payload = void,
-  Actions = any
-> = Payload extends void
-  ? _ActionArgs<State, Actions>
-  : _ActionArgs<State, Actions> & {
-      payload: Payload;
-    };
-type State<Models> = {
-  [modelKey in keyof Models]: Models[modelKey];
-};
-export type HookArgs<State, Actions = any> = {
-  state: State;
-  actions: ReturnedActions<Actions>;
-  set: SetFn<State>;
-};
-type GetReturnType<T> = T extends (...args: any[]) => infer U ? U : never;
 
-function stub<Return>(_: any): Return {
-  return {} as Return;
-}
-
-export function createStore<Models, Actions, Hooks>({
-  models = {} as Models,
-  actions = {} as Actions,
-  hooks = {} as Hooks,
+export function createStore<
+  Slices,
+  Reducers extends {
+    [K: string]: (state: State<Slices>, payload: any) => State<Slices>;
+  }
+>({
+  slices = {} as Slices,
+  reducers = {} as Reducers,
 }: {
-  models: Models;
-  actions: Actions;
-  hooks?: Hooks;
+  slices: Slices;
+  reducers: Reducers;
 }) {
-  if (Object.keys(models).length === 0) {
-    console.error('[Redonk] You must pass at least one model to createStore!');
-  }
-  const modelContexts: any = {};
-  const initialState: State<Models> = {} as State<Models>;
-  for (const [modelKey, _initialState] of Object.entries(models)) {
-    const stateContext = React.createContext(_initialState);
-    stateContext.displayName = modelKey;
-    modelContexts[modelKey] = stateContext;
-    (initialState as any)[modelKey] = _initialState;
-  }
-
-  const hooksConfig: any = {};
-  for (const [hookKey, useHook] of Object.entries<any>(hooks)) {
-    const hookContext = React.createContext({});
-    hookContext.displayName = hookKey;
-    const Comp = ({
-      children,
-      state,
-      actions,
-      set,
-    }: {
-      children: React.ReactNode;
-      state: State<Models>;
-      actions: ReturnedActions<Actions>;
-      set: SetFn<State<Models>>;
-    }) => {
-      const hookReturn = useHook({ state, actions, set });
-      return (
-        <hookContext.Provider value={hookReturn}>
-          {children}
-        </hookContext.Provider>
-      );
+  const slicesConfig: any = {};
+  const initialState: State<Slices> = {} as State<Slices>;
+  for (const [sliceKey, _initialState] of Object.entries(slices)) {
+    const context = React.createContext(_initialState);
+    context.displayName = sliceKey;
+    slicesConfig[sliceKey] = {
+      context,
+      provider: <context.Provider value={_initialState} />,
     };
-    (Comp as any).displayName = `${hookKey}.Component`;
-    hooksConfig[hookKey] = {
-      hookContext,
-      Comp,
-    };
+    (initialState as any)[sliceKey] = _initialState;
   }
-
-  const actionsContext = React.createContext<ReturnedActions<Actions>>(
-    {} as ReturnedActions<Actions>
+  const actionsContext = React.createContext<Actions<Reducers>>(
+    {} as Actions<Reducers>
   );
   actionsContext.displayName = 'RedonkActions';
-  const stateContext = React.createContext<State<Models>>(initialState);
+  const stateContext = React.createContext<State<Slices>>(initialState);
   stateContext.displayName = 'RedonkState';
 
   function Provider({ children }: { children: React.ReactNode }) {
-    const [[state, onUpdate], dispatch] = React.useReducer(
-      ([state]: any, args: any) => {
-        const { cb, modelKey, onUpdate } = args;
-        if ('modelKey' in args && typeof modelKey === 'string') {
-          return [
-            {
-              ...state,
-              [modelKey]: cb(state[modelKey]),
-            },
-            onUpdate,
-          ];
-        }
-        return [cb(state), onUpdate];
-      },
-      [initialState, stub]
+    const [state, dispatch] = React.useReducer(
+      (state: any, { reducer, payload }: any) => reducer(state, payload),
+      initialState
     );
 
-    React.useEffect(() => {
-      stateRef.current = state;
-      if (typeof onUpdate === 'function') onUpdate(state);
-    }, [state, onUpdate]);
-
-    const stateRef = React.useRef<any>(initialState);
-
-    const getStateRef = React.useRef<any>(() => stateRef.current);
-
-    const setRef = React.useRef<any>(async (cbOrModelKey: any, cb: any) => {
-      let resolve: (state: any) => void;
-      let promise = new Promise<State<Models>>(r => {
-        resolve = r;
-      });
-      if (typeof cbOrModelKey === 'function') {
-        dispatch({
-          cb: cbOrModelKey,
-          onUpdate: (state: any) => resolve(state),
-        });
-      } else {
-        dispatch({
-          modelKey: cbOrModelKey,
-          cb,
-          onUpdate: (state: any) => resolve(state),
-        });
+    const actions = React.useMemo(() => {
+      let actionCreators: Actions<Reducers> = {} as Actions<Reducers>;
+      for (const [name, reducer] of Object.entries<any>(reducers)) {
+        (actionCreators as any)[name] = (payload: any) =>
+          dispatch({ reducer, payload });
       }
-      return promise;
-    });
+      return actionCreators;
+    }, []);
 
-    const actionsRef = React.useRef(
-      (() => {
-        let _actions: ReturnedActions<Actions> = {} as ReturnedActions<Actions>;
-        for (const [actionName, action] of Object.entries<any>(actions)) {
-          (_actions as any)[actionName] = (payload: any) =>
-            action({
-              set: setRef.current,
-              payload,
-              actions: actionsRef.current,
-              getState: getStateRef.current,
-            });
-        }
-        return _actions;
-      })()
-    );
-
-    function buildModelProviderTree(children: React.ReactNode) {
+    function buildSliceProviderTree(children: React.ReactNode) {
       let tree = children;
-      const entries = Object.entries<any>(modelContexts);
+      const entries = Object.entries<any>(slicesConfig);
       for (let i = entries.length - 1; i >= 0; i--) {
-        const [modelKey, modelContext] = entries[i];
-        tree = React.createElement(
-          modelContext.Provider,
+        const [sliceKey, context] = entries[i];
+        tree = React.cloneElement(
+          context.provider,
           {
-            value: state[modelKey],
-          },
-          tree
-        );
-      }
-      return tree;
-    }
-
-    function buildHookComponentTree(children: React.ReactNode) {
-      let tree = children;
-      const values = Object.values<any>(hooksConfig);
-      for (let i = values.length - 1; i >= 0; i--) {
-        const hookConfig = values[i];
-        tree = React.createElement(
-          hookConfig.Comp,
-          {
-            state,
-            actions: actionsRef.current,
-            set: setRef.current,
+            value: state[sliceKey],
           },
           tree
         );
@@ -201,8 +76,8 @@ export function createStore<Models, Actions, Hooks>({
 
     return (
       <stateContext.Provider value={state}>
-        <actionsContext.Provider value={actionsRef.current}>
-          {buildModelProviderTree(buildHookComponentTree(children))}
+        <actionsContext.Provider value={actions}>
+          {buildSliceProviderTree(children)}
         </actionsContext.Provider>
       </stateContext.Provider>
     );
@@ -210,20 +85,18 @@ export function createStore<Models, Actions, Hooks>({
 
   Provider.displayName = 'RedonkProvider';
 
-  function useModelState<modelKey extends keyof Models>(
-    modelKey: modelKey
-  ): Models[modelKey] {
-    return React.useContext(modelContexts[modelKey] ?? {});
+  function useSliceState<SliceKey extends keyof Slices>(
+    sliceKey: SliceKey
+  ): Slices[SliceKey] {
+    if (!(sliceKey in slicesConfig))
+      console.error(
+        `[Redonk] You called useSliceState with a slice key which was not passed to createStore`
+      );
+    return React.useContext(slicesConfig[sliceKey].context ?? {});
   }
 
   function useActions() {
     return React.useContext(actionsContext);
-  }
-
-  function useHookReturn<HookKey extends keyof Hooks>(
-    hookKey: HookKey
-  ): GetReturnType<Hooks[HookKey]> {
-    return React.useContext(hooksConfig[hookKey]?.hookContext ?? {});
   }
 
   function useRedonkState() {
@@ -232,9 +105,8 @@ export function createStore<Models, Actions, Hooks>({
 
   return {
     Provider,
-    useModelState,
+    useSliceState,
     useActions,
-    useHookReturn,
     useRedonkState,
   };
 }
