@@ -1,5 +1,4 @@
-import * as React from 'react';
-import { createStore, ActionArgs, HookArgs } from 'redonk';
+import { createStore } from 'redonk';
 
 export type Todo = {
   id: string;
@@ -7,7 +6,7 @@ export type Todo = {
   isDone: boolean;
 };
 
-type FilterType = 'all' | 'active' | 'completed';
+export type FilterType = 'all' | 'active' | 'completed';
 
 type AppState = {
   counter: {
@@ -19,13 +18,8 @@ type AppState = {
   };
 };
 
-export const {
-  Provider,
-  useModelState,
-  useActions,
-  useHookReturn,
-} = createStore({
-  models: {
+export const { Provider, useSliceState, useActions } = createStore({
+  slices: {
     counter: {
       count: 0,
     },
@@ -40,80 +34,93 @@ export const {
       filter: 'all',
     },
   } as AppState,
-  hooks: {
-    useFilteredTodos: ({ state }: HookArgs<AppState>) => {
-      return React.useMemo(() => {
-        return state.todos.items.filter(todo => {
-          if (state.todos.filter === 'active') return !todo.isDone;
-          if (state.todos.filter === 'completed') return todo.isDone;
-          return true;
-        });
-      }, [state.todos]);
-    },
-    useIsFilterActive: ({ state }: HookArgs<AppState>) => {
-      return React.useCallback(
-        (filterToCheck: FilterType) => filterToCheck === state.todos.filter,
-        [state.todos.filter]
-      );
-    },
-  },
-  actions: {
-    increment: ({ set }: ActionArgs<AppState>) => {
-      set('counter', s => ({
+  reducers: {
+    increment: s => {
+      return {
         ...s,
-        count: s.count + 1,
-      }));
+        counter: {
+          ...s.counter,
+          count: s.counter.count + 1,
+        },
+      };
     },
-    decrement: ({ set }: ActionArgs<AppState>) => {
-      set('counter', s => ({
+    decrement: s => {
+      return {
         ...s,
-        count: s.count - 1,
-      }));
+        counter: {
+          ...s.counter,
+          count: s.counter.count - 1,
+        },
+      };
     },
-    incrementByAmount: ({ set, payload }: ActionArgs<AppState, number>) => {
-      set('counter', s => ({
+    incrementByAmount: (s, amount: number) => {
+      return {
         ...s,
-        count: s.count + payload,
-      }));
+        counter: {
+          ...s.counter,
+          count: s.counter.count + amount,
+        },
+      };
     },
-    resetCounter: ({ set }: ActionArgs<AppState>) => {
-      set('counter', s => ({ ...s, count: 0 }));
-    },
-    addTodo: ({ set, payload }: ActionArgs<AppState, Todo>) => {
-      set('todos', s => ({
+    resetCounter: s => {
+      return {
         ...s,
-        items: [...s.items, payload],
-      }));
+        counter: {
+          ...s.counter,
+          count: 0,
+        },
+      };
     },
-    removeTodo: ({ set, payload }: ActionArgs<AppState, Todo['id']>) => {
-      set('todos', s => ({
+    addTodo: (s, todo: Todo) => {
+      return {
         ...s,
-        items: s.items.filter(todo => todo.id !== payload),
-      }));
+        todos: {
+          ...s.todos,
+          items: [...s.todos.items, todo],
+        },
+      };
     },
-    setTodoText: ({
-      set,
-      payload,
-    }: ActionArgs<AppState, { id: Todo['id']; text: Todo['text'] }>) => {
-      set('todos', s => ({
+    removeTodo: (s, todoId: Todo['id']) => {
+      return {
         ...s,
-        items: s.items.map(todo => {
-          if (todo.id === payload.id) return { ...todo, text: payload.text };
-          return todo;
-        }),
-      }));
+        todos: {
+          ...s.todos,
+          items: s.todos.items.filter(todo => todo.id !== todoId),
+        },
+      };
     },
-    toggleDone: ({ set, payload }: ActionArgs<AppState, Todo['id']>) => {
-      set('todos', s => ({
+    setTodoText: (s, payload: { id: Todo['id']; text: Todo['text'] }) => {
+      return {
         ...s,
-        items: s.items.map(todo => {
-          if (todo.id === payload) return { ...todo, isDone: !todo.isDone };
-          return todo;
-        }),
-      }));
+        todos: {
+          ...s.todos,
+          items: s.todos.items.map(todo => {
+            if (todo.id === payload.id) return { ...todo, text: payload.text };
+            return todo;
+          }),
+        },
+      };
     },
-    setFilter: ({ set, payload }: ActionArgs<AppState, FilterType>) => {
-      set('todos', s => ({ ...s, filter: payload }));
+    toggleDone: (s, todoId: Todo['id']) => {
+      return {
+        ...s,
+        todos: {
+          ...s.todos,
+          items: s.todos.items.map(todo => {
+            if (todo.id === todoId) return { ...todo, isDone: !todo.isDone };
+            return todo;
+          }),
+        },
+      };
+    },
+    setFilter: (s, filter: FilterType) => {
+      return {
+        ...s,
+        todos: {
+          ...s.todos,
+          filter,
+        },
+      };
     },
   },
 });

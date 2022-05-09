@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useModelState, useActions } from './store';
+import { useSliceState, useActions } from './store';
 
 const CounterAddAmount = React.memo(() => {
   const [state, setState] = React.useState('0');
@@ -48,7 +48,7 @@ const CounterButtons = () => {
 };
 
 const Count = () => {
-  const { count } = useModelState('counter');
+  const { count } = useSliceState('counter');
 
   return (
     <div

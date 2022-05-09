@@ -1,15 +1,13 @@
 import React from 'react';
+import { CounterExample } from './counter';
 import { Provider } from './store';
 import { Todos } from './todos';
-import { CounterExample } from './counter';
 
 function App() {
   return (
     <Provider>
-      <div>
-        <CounterExample />
-        <Todos />
-      </div>
+      <CounterExample />
+      <Todos />
     </Provider>
   );
 }

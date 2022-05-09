@@ -1,8 +1,11 @@
 import * as React from 'react';
-import { useActions, Todo, useHookReturn } from './store';
+import { useMemo } from 'react';
+import { useActions, Todo, useSliceState, FilterType } from './store';
 
 const TodosFilters = () => {
-  const isFilterActive = useHookReturn('useIsFilterActive');
+  const { filter } = useSliceState('todos');
+  const isFilterActive = (filterToCheck: FilterType) =>
+    filterToCheck === filter;
   const { setFilter } = useActions();
 
   return (
@@ -90,8 +93,20 @@ const TodoListItem = React.memo(({ todo }: { todo: Todo }) => {
   );
 });
 
+const useFilteredTodos = () => {
+  const { items, filter } = useSliceState('todos');
+
+  return useMemo(() => {
+    return items.filter(todo => {
+      if (filter === 'active') return !todo.isDone;
+      if (filter === 'completed') return todo.isDone;
+      return true;
+    });
+  }, [items, filter]);
+};
+
 const TodosList = () => {
-  const filteredTodos = useHookReturn('useFilteredTodos');
+  const filteredTodos = useFilteredTodos();
 
   return (
     <ul style={{ listStyleType: 'none', padding: 0 }}>
