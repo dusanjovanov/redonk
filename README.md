@@ -215,7 +215,7 @@ return (
 
 ### `useSliceState(sliceKey: string)`
 
-Returns the state of the slice whose key you passed in.
+Returns the state of the slice whose key you passed in. Only causes a render if you update that slice.
 
 ```tsx
 const counterState = useSliceState('counter');
@@ -223,7 +223,7 @@ const counterState = useSliceState('counter');
 
 ### `useActions()`
 
-Returns all of the actions.
+Returns all of the actions. Never causes a render because `actions` are memoized.
 
 ```tsx
 const actions = useActions();
