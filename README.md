@@ -144,7 +144,7 @@ const App = () => {
 
 The library only exports one function!
 
-### `createStore({ slices, actions }) => { Provider, useSliceState, useActions, useRedonkState }`
+### `createStore({ slices, reducers }) => { Provider, useSliceState, useActions, useRedonkState }`
 
 ```tsx
 import { createStore } from 'redonk';
@@ -153,7 +153,7 @@ const { Provider, useSliceState, useActions, useRedonkState } = createStore({
   slices: {
     count: 0,
   },
-  actions: {
+  reducers: {
     increment: state => {
       return {
         ...state,
