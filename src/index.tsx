@@ -1,11 +1,11 @@
 import * as React from 'react';
 
-type Action<Reducer> = Reducer extends (
-  state: any,
-  payload: infer Payload
-) => any
+type Action<Reducer> = Reducer extends (state: any) => any
+  ? () => void
+  : Reducer extends (state: any, payload: infer Payload) => void
   ? (payload: Payload) => void
-  : any;
+  : unknown;
+
 type Actions<Reducers> = {
   [ReducerName in keyof Reducers]: Action<Reducers[ReducerName]>;
 };
